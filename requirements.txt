@@ -1,0 +1,5 @@
+requests
+argparse
+pylint
+argparse-formatter
+pyinstaller
