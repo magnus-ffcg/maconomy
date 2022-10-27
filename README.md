@@ -20,7 +20,7 @@ You report time like this, basically saying which row and hours per day (5 days)
 If you are unsure which row to use, please use the "view" command.
 
 ```bash
-maconomy report -u "username" -p "password" -r 8 -t "8,8,8,8,8"
+maconomy report -a "https://xxxx-iaccess.deltekfirst.com/maconomy-api/containers/xxxx/" -u "username" -p "password" -r 8 -t "8,8,8,8,8"
 ```
 
 Limitation: You can only report for the entire week at once
@@ -30,7 +30,7 @@ Limitation: You can only report for the entire week at once
 List the current timereport
 
 ```bash
-maconomy view -u "username" -p "password"
+maconomy view -a "https://xxxx-iaccess.deltekfirst.com/maconomy-api/containers/xxxx/" -u "username" -p "password"
 ```
 
 ### Submit
@@ -38,7 +38,7 @@ maconomy view -u "username" -p "password"
 Please keep in mind that submitting should be the last thing you do, as it will lock your timesheet.
 
 ```bash
-maconomy submit -u "username" -p "password"
+maconomy submit -a "https://xxxx-iaccess.deltekfirst.com/maconomy-api/containers/xxxx/" -u "username" -p "password"
 ```
 
 ## Future
