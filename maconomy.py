@@ -266,7 +266,7 @@ if __name__ == "__main__":
     / /|_/ / __ `/ ___/ __ \/ __ \/ __ \/ __ `__ \/ / / /
    / /  / / /_/ / /__/ /_/ / / / / /_/ / / / / / / /_/ / 
   /_/  /_/\__,_/\___/\____/_/ /_/\____/_/ /_/ /_/\__, /  
-                                                /____/   
+   LIFE-HACK (time-reporting cli)               /____/   
     """)
     parent_parser = argparse.ArgumentParser(description="", formatter_class=ParagraphFormatter)
     parent_parser.add_argument('--api', '-a', help='url to maconomy', required=True)
