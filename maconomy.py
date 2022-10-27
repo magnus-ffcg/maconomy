@@ -7,6 +7,7 @@ import logging
 import textwrap
 import json
 import sys
+from argparse_formatter import ParagraphFormatter
 
 class ApiClient():
     def __init__(self, url, headers=None, auth=None, logger=None, verbose=False):
@@ -42,6 +43,12 @@ class ApiClient():
         return None
 
 class MaconomyApiClient(ApiClient):
+    logger = None
+    verbose = False
+    previous_reconnect_token = None
+    previous_concurrency_token = None
+    previous_request_id = None
+
     def __init__(self, url, username, password, logger=None, verbose=False):
         self.logger = logger
         self.verbose = verbose
@@ -56,8 +63,65 @@ class MaconomyApiClient(ApiClient):
 
         super().__init__(url=url, headers=headers, auth=(username, password), logger=logger, verbose=self.verbose)
 
-    def post(self, path='', data=None, extra_headers=None):
-        return self._call(verb='POST', path=path, data=data, extra_headers=extra_headers)  
+    def _post(self, path='', data=None, extra_headers=None):
+        response = self._call(verb='POST', path=path, data=data, extra_headers=extra_headers)  
+
+        if not self.previous_reconnect_token and 'Maconomy-Reconnect' in response.headers:
+            self.previous_reconnect_token = response.headers["Maconomy-Reconnect"]
+
+        if 'Maconomy-Concurrency-Control' in response.headers:   
+            self.previous_concurrency_token = response.headers["Maconomy-Concurrency-Control"]
+
+        self.previous_request_id = response.headers["Maconomy-RequestId"] 
+
+        return response
+
+    def get_timereport_instance(self):
+        self.logger.info("Creating timereporting instance")
+        
+        headers = dict()
+        headers["Maconomy-Authentication"] = "X-Basic"
+        headers["Maconomy-Authentication"] = "X-Reconnect"
+
+        response = self._post(path="timeregistration/instances", data=dict(), extra_headers=headers)
+        if response and response.status_code == 200:
+            return response.json()    
+
+        logger.error("Request failed - Aborting")
+        return None
+        
+    def get_weekly_timereport(self, instance_id):
+        self.logger.info("Fetching weekly timesheet")
+
+        headers = dict()
+        headers["Authorization"] = f"X-Reconnect {self.previous_reconnect_token}"
+        headers["Maconomy-Concurrency-Control"] = self.previous_concurrency_token
+        headers["Maconomy-RequestId"] = self.previous_request_id
+
+        response = self._post(path=f"timeregistration/instances/{instance_id}/data;any", extra_headers=headers)
+        if response and response.status_code == 200:
+            return response.json()
+    
+        self.logger.error("Request failed - Aborting")
+        return None
+
+    def post_timereport(self, instance_id, row, payload):
+        self.logger.info(f"Posting your timelog for row {row}")
+
+        headers = dict()
+        headers["Authorization"] = f"X-Reconnect {self.previous_reconnect_token}"
+        headers["Maconomy-Concurrency-Control"] = self.previous_concurrency_token
+        headers["Maconomy-RequestId"] = self.previous_request_id
+        headers["Maconomy-Authentication"] = "X-Log-Out"
+
+        response = self._post(path=f"timeregistration/instances/{instance_id}/data/panes/table/{row}", data=payload, extra_headers=headers)
+
+        if response and response.status_code == 200:
+            return response.json()
+
+        self.logger.error("Request failed - Aborting")
+        return None
+    
 
 
 def command_report(args, logger):
@@ -70,70 +134,45 @@ def command_report(args, logger):
         return
 
     # Login and create timereporting instance
-    logger.info("Creating timereporting instance")
-    headers = dict()
-    headers["Maconomy-Authentication"] = "X-Basic"
-    headers["Maconomy-Authentication"] = "X-Reconnect"
-
-    response = api.post(path="timeregistration/instances", data=dict(), extra_headers=headers)
-    if response and response.status_code == 200:
-        instance_id = response.json()["meta"]["containerInstanceId"]
-        reconnect_token = response.headers["Maconomy-Reconnect"]
-        concurrency_token = response.headers["Maconomy-Concurrency-Control"]
-        request_id = response.headers["Maconomy-RequestId"]
-    else:
-        logger.error("Request failed - Aborting")
+    response = api.get_timereport_instance()
+    if not response or not 'meta' in response:
         return
-    
+
+    # Get instance id
+    instance_id = response["meta"]["containerInstanceId"]
+
+    if not instance_id:
+        return
+
     # Need to reset auth as we use token from now on
     api.auth=None
 
     # Get data for this week
-    logger.info("Fetching weekly timesheet")
-
-    headers = dict()
-    headers["Authorization"] = f"X-Reconnect {reconnect_token}"
-    headers["Maconomy-Concurrency-Control"] = concurrency_token
-    headers["Maconomy-RequestId"] = request_id
-
-    response = api.post(path=f"timeregistration/instances/{instance_id}/data;any", extra_headers=headers)
-    if response and response.status_code == 200:
-        reconnect_token = response.headers["Maconomy-Reconnect"]
-        concurrency_token = response.headers["Maconomy-Concurrency-Control"]
-        request_id = response.headers["Maconomy-RequestId"]
-    else:  
-        logger.error("Request failed - Aborting")
+    response = api.get_weekly_timereport(instance_id)
+    if not response or not 'panes' in response: 
         return
 
-    # Get specific payload and post the data
-    logger.info(f"Posting your timelog for row {args.row}")
-    json_reponse = response.json()
-    payload = json_reponse["panes"]["table"]["records"][int(args.row)]
-
+    # Get specific payload for row
+    payload = response["panes"]["table"]["records"][int(args.row)]
     for i, time in enumerate(timeperday):
         payload["data"][f"numberday{(i+1)}"] = int(time)
+
+    # Post the time report row
+    response = api.post_timereport(instance_id, args.row, payload)
+    if not response:
+        return
+
+    employee = payload["data"]["employeenumber"]
+    period = payload["data"]["periodstart"]
+    jobnumber = payload["data"]["jobnumber"]
     
-    headers = dict()
-    headers["Authorization"] = f"X-Reconnect {reconnect_token}"
-    headers["Maconomy-Concurrency-Control"] = concurrency_token
-    headers["Maconomy-RequestId"] = request_id
-    headers["Maconomy-Authentication"] = "X-Log-Out"
+    logger.info(f"Success, Updated row {args.row} for {employee} and period {period} and jobnumber {jobnumber} ")
+        
 
-    response = api.post(path=f"timeregistration/instances/{instance_id}/data/panes/table/{args.row}", data=payload, extra_headers=headers)
-
-    if response and response.status_code == 200:
-        employee = payload["data"]["employeenumber"]
-        period = payload["data"]["periodstart"]
-        jobnumber = payload["data"]["jobnumber"]
-        logger.info(f"Success, Updated row {args.row} for {employee} and period {period} and jobnumber {jobnumber} ")
-    else:  
-        logger.error("Failed")
 
 def command_submit(args, logger): 
+    logger.info("Not implemented")
     pass
-    
-
-
 
 
 if __name__ == "__main__":
@@ -144,7 +183,7 @@ if __name__ == "__main__":
   /_/  /_/\__,_/\___/\____/_/ /_/\____/_/ /_/ /_/\__, /  
                                                 /____/   
     """)
-    parent_parser = argparse.ArgumentParser(description="", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parent_parser = argparse.ArgumentParser(description="", formatter_class=ParagraphFormatter)
     parent_parser.add_argument('--username', '-u', help='username', required=True)
     parent_parser.add_argument('--password', '-p', help='password', required=True)
     parent_parser.add_argument('--verbose', '-v', action='store_true', help="verbose")
