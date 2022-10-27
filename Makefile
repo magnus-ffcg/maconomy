@@ -11,7 +11,7 @@ lint:
 
 create-bundle:
 	source venv/bin/activate && \
-		pyinstaller --onefile maconomy.py 
+		pyinstaller -c --onefile maconomy.py 
 
 install-bundle:
-	sudo cp dist/maconomy /usr/local/bin/maconomy
+	sudo cp -rf dist/maconomy /usr/local/bin/maconomy

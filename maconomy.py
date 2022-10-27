@@ -145,7 +145,7 @@ class MaconomyApiClient(ApiClient):
 
 
 def command_report(args, logger):
-    api = MaconomyApiClient(url=args.api, username=args.username, password=args.password, logger=logger, verbose=args.verbose)
+    api = MaconomyApiClient(url=args.url, username=args.username, password=args.password, logger=logger, verbose=args.verbose)
 
     timeperday = args.timeperday.split(',')
     if len(timeperday) != 5:
@@ -194,7 +194,7 @@ def command_report(args, logger):
 
 
 def command_submit(args, logger): 
-    api = MaconomyApiClient(url=args.api, username=args.username, password=args.password, logger=logger, verbose=args.verbose)
+    api = MaconomyApiClient(url=args.url, username=args.username, password=args.password, logger=logger, verbose=args.verbose)
 
     response = api.get_timereport_instance()
     if not response or not 'meta' in response:
@@ -225,7 +225,7 @@ def command_submit(args, logger):
 
 
 def command_view(args, logger):
-    api = MaconomyApiClient(url=args.api, username=args.username, password=args.password, logger=logger, verbose=args.verbose)
+    api = MaconomyApiClient(url=args.url, username=args.username, password=args.password, logger=logger, verbose=args.verbose)
 
     # Login and create timereporting instance
     response = api.get_timereport_instance()
@@ -269,12 +269,12 @@ if __name__ == "__main__":
    LIFE-HACK (time-reporting cli)               /____/   
     """)
     parent_parser = argparse.ArgumentParser(description="", formatter_class=ParagraphFormatter)
-    parent_parser.add_argument('--api', '-a', help='url to maconomy', required=True)
+    parent_parser.add_argument('--api', '-a', help='url to maconomy', required=True, dest="url")
     parent_parser.add_argument('--username', '-u', help='username', required=True)
     parent_parser.add_argument('--password', '-p', help='password', required=True)
     parent_parser.add_argument('--verbose', '-v', action='store_true', help="verbose")
 
-    parser = argparse.ArgumentParser(add_help=False)
+    parser = argparse.ArgumentParser(add_help=False) 
     subparsers = parser.add_subparsers(dest="command", required=True)   
 
     report_parser = subparsers.add_parser('report', add_help=False, parents = [parent_parser])
