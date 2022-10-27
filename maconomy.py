@@ -123,7 +123,6 @@ class MaconomyApiClient(ApiClient):
         return None
     
 
-
 def command_report(args, logger):
     url = 'https://me47417-iaccess.deltekfirst.com/maconomy-api/containers/me47417/'
     api = MaconomyApiClient(url=url, username=args.username, password=args.password, logger=logger, verbose=args.verbose)
@@ -132,6 +131,11 @@ def command_report(args, logger):
     if len(timeperday) != 5:
         logger.error('You need to report all week days att once sadly, -t/--timeperday "8,8,8,8,8" ')
         return
+   
+    if args.row.isnumeric() == False or int(args.row) < 0:
+        logger.error("You need to pass a number >= 0 to -r/--row")
+        return
+    row = int(args.row)
 
     # Login and create timereporting instance
     response = api.get_timereport_instance()
@@ -153,12 +157,12 @@ def command_report(args, logger):
         return
 
     # Get specific payload for row
-    payload = response["panes"]["table"]["records"][int(args.row)]
+    payload = response["panes"]["table"]["records"][row]
     for i, time in enumerate(timeperday):
         payload["data"][f"numberday{(i+1)}"] = int(time)
 
     # Post the time report row
-    response = api.post_timereport(instance_id, args.row, payload)
+    response = api.post_timereport(instance_id, row, payload)
     if not response:
         return
 
@@ -167,7 +171,6 @@ def command_report(args, logger):
     jobnumber = payload["data"]["jobnumber"]
     
     logger.info(f"Success, Updated row {args.row} for {employee} and period {period} and jobnumber {jobnumber} ")
-        
 
 
 def command_submit(args, logger): 
