@@ -7,6 +7,7 @@ import logging
 import textwrap
 import json
 import sys
+from tabulate import tabulate
 from argparse_formatter import ParagraphFormatter
 
 class ApiClient():
@@ -90,13 +91,16 @@ class MaconomyApiClient(ApiClient):
         logger.error("Request failed - Aborting")
         return None
         
-    def get_weekly_timereport(self, instance_id):
+    def get_weekly_timereport(self, instance_id, logout=False):
         self.logger.info("Fetching weekly timesheet")
 
         headers = dict()
         headers["Authorization"] = f"X-Reconnect {self.previous_reconnect_token}"
         headers["Maconomy-Concurrency-Control"] = self.previous_concurrency_token
         headers["Maconomy-RequestId"] = self.previous_request_id
+
+        if logout:
+            headers["Maconomy-Authentication"] = "X-Log-Out"
 
         response = self._post(path=f"timeregistration/instances/{instance_id}/data;any", extra_headers=headers)
         if response and response.status_code == 200:
@@ -121,10 +125,26 @@ class MaconomyApiClient(ApiClient):
 
         self.logger.error("Request failed - Aborting")
         return None
-    
+
+    def submit_timereport(self, instance_id):
+        self.logger.info(f"Submitting your timereport for this week")
+
+        headers = dict()
+        headers["Authorization"] = f"X-Reconnect {self.previous_reconnect_token}"
+        headers["Maconomy-Concurrency-Control"] = self.previous_concurrency_token
+        headers["Maconomy-RequestId"] = self.previous_request_id
+        headers["Maconomy-Authentication"] = "X-Log-Out"
+        
+        response = self._post(path=f"timeregistration/instances/{instance_id}/data/panes/card/0/action;name=submittimesheet", extra_headers=headers)
+
+        if response and response.status_code == 200:
+            return response.json()
+
+        self.logger.error("Request failed - Aborting")
+        return None
+
 
 def command_report(args, logger):
-    url = 'https://me47417-iaccess.deltekfirst.com/maconomy-api/containers/me47417/'
     api = MaconomyApiClient(url=url, username=args.username, password=args.password, logger=logger, verbose=args.verbose)
 
     timeperday = args.timeperday.split(',')
@@ -174,9 +194,74 @@ def command_report(args, logger):
 
 
 def command_submit(args, logger): 
-    logger.info("Not implemented")
-    pass
+    api = MaconomyApiClient(url=url, username=args.username, password=args.password, logger=logger, verbose=args.verbose)
 
+    response = api.get_timereport_instance()
+    if not response or not 'meta' in response:
+        return
+
+    instance_id = response["meta"]["containerInstanceId"]
+
+    if not instance_id:
+        return
+
+    # Need to reset auth as we use token from now on
+    api.auth=None
+
+    # Need to reset auth as we use token from now on
+    api.auth=None
+
+    # Get data for this week
+    response = api.get_weekly_timereport(instance_id)
+    if not response or not 'panes' in response: 
+        return
+
+    # Get data for this week
+    response = api.submit_timereport(instance_id)
+    if not response: 
+        return
+
+    logger.info("Success")
+
+
+def command_view(args, logger):
+    api = MaconomyApiClient(url=url, username=args.username, password=args.password, logger=logger, verbose=args.verbose)
+
+    # Login and create timereporting instance
+    response = api.get_timereport_instance()
+    if not response or not 'meta' in response:
+        return
+
+    # Get instance id
+    instance_id = response["meta"]["containerInstanceId"]
+
+    if not instance_id:
+        return
+
+    # Need to reset auth as we use token from now on
+    api.auth=None
+
+    # Get data for this week
+    response = api.get_weekly_timereport(instance_id, logout=True)
+    if not response or not 'panes' in response: 
+        return
+
+    # Get specific payload for row
+    meta = response["panes"]["card"]["records"][0]["data"]
+    records = response["panes"]["table"]["records"]
+
+    data = []
+    print(f'Timereport for {meta["employeenamevar"]}')
+
+    headers = ["Row", "Job", "Task", "Mon", "Tue", "Wed", "Thu", "Fri"]
+    for record in records:
+        row = record["data"]
+        data.append([row["linenumber"]-1, row["description"], row["entrytext"], row["numberday1"], row["numberday2"], row["numberday3"], row["numberday4"], row["numberday5"]])
+
+    print(tabulate(data, headers=headers))
+
+
+url = 'https://me47417-iaccess.deltekfirst.com/maconomy-api/containers/me47417/' 
 
 if __name__ == "__main__":
     print("""      __  ___                                            
@@ -199,6 +284,7 @@ if __name__ == "__main__":
     report_parser.add_argument('--timeperday', '-t', help='time per day (8,8,8,8,8)', required=True)
 
     submit_parser = subparsers.add_parser('submit', add_help=False, parents = [parent_parser])
+    view_parser = subparsers.add_parser('view', add_help=False, parents = [parent_parser])
     
     args = parser.parse_args()
     
@@ -217,3 +303,6 @@ if __name__ == "__main__":
 
     if args.command == 'submit':
         command_submit(args, logger)  
+
+    if args.command == 'view':
+        command_view(args, logger) 

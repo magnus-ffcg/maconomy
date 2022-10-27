@@ -14,19 +14,28 @@ make install-bundle
 
 ## How to use
 
-### Report
+### Report time for your weekly timereport
 
-You report time like this:
+You report time like this, basically saying which row and hours per day (5 days)
+If you are unsure which row to use, please use the "view" command.
 
 ```bash
 maconomy report -u "username" -p "password" -r 8 -t "8,8,8,8,8"
 ```
 
-Limitation: You can only report time for a row number and for all 5 days in work week
+Limitation: You can only report for the entire week at once
+
+### View your weekly timereport
+
+List the current timereport
+
+```bash
+maconomy view -u "username" -p "password"
+```
 
 ### Submit
 
-Is not yet implemented but will work like this
+Please keep in mind that submitting should be the last thing you do, as it will lock your timesheet.
 
 ```bash
 maconomy submit -u "username" -p "password"

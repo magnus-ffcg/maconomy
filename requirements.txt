@@ -3,3 +3,4 @@ argparse
 pylint
 argparse-formatter
 pyinstaller
+tabulate
